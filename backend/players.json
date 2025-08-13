@@ -1,5 +1,11 @@
 [
-  { "id": 1, "name": "Patrick Mahomes", "position": "QB", "team": "KC" },
-  { "id": 2, "name": "Justin Jefferson", "position": "WR", "team": "MIN" },
-  { "id": 3, "name": "Christian McCaffrey", "position": "RB", "team": "SF" }
+  { "id": "patrick_mahomes|kc|qb", "name": "Patrick Mahomes", "position": "QB", "team": "KC", "adp": 20, "proj_pts": 360, "proj_pass_yds": 4700, "proj_pass_td": 34, "proj_int": 11, "qb_pass_att": 620, "qb_rush_share": 0.10 },
+  { "id": "josh_allen|buf|qb", "name": "Josh Allen", "position": "QB", "team": "BUF", "adp": 21, "proj_pts": 365, "proj_pass_yds": 4300, "proj_pass_td": 32, "proj_int": 14, "qb_pass_att": 580, "qb_rush_share": 0.28 },
+  { "id": "christian_mccaffrey|sf|rb", "name": "Christian McCaffrey", "position": "RB", "team": "SF", "adp": 1, "proj_pts": 330, "proj_rec": 80, "proj_rec_yds": 720, "proj_rec_td": 8, "proj_rush": 260, "proj_rush_yds": 1200, "proj_rush_td": 12 },
+  { "id": "bijan_robinson|atl|rb", "name": "Bijan Robinson", "position": "RB", "team": "ATL", "adp": 8, "proj_pts": 270, "proj_rec": 65, "proj_rec_yds": 520, "proj_rec_td": 5, "proj_rush": 250, "proj_rush_yds": 1200, "proj_rush_td": 8 },
+  { "id": "justin_jefferson|min|wr", "name": "Justin Jefferson", "position": "WR", "team": "MIN", "adp": 2, "proj_pts": 310, "proj_rec": 103, "proj_rec_yds": 1533, "proj_rec_td": 10, "qb_pass_att": 600, "qb_rush_share": 0.15, "target_share": 0.28 },
+  { "id": "jamar_chase|cin|wr", "name": "Ja'Marr Chase", "position": "WR", "team": "CIN", "adp": 3, "proj_pts": 305, "proj_rec": 105, "proj_rec_yds": 1500, "proj_rec_td": 11, "qb_pass_att": 610, "qb_rush_share": 0.12, "target_share": 0.27 },
+  { "id": "travis_kelce|kc|te", "name": "Travis Kelce", "position": "TE", "team": "KC", "adp": 14, "proj_pts": 240, "proj_rec": 95, "proj_rec_yds": 1080, "proj_rec_td": 8, "qb_pass_att": 620, "qb_rush_share": 0.10, "target_share": 0.23 },
+  { "id": "49ers_dst|sf|dst", "name": "49ers D/ST", "position": "DST", "team": "SF", "adp": 120, "proj_pts": 130 },
+  { "id": "justin_tucker|bal|k", "name": "Justin Tucker", "position": "K", "team": "BAL", "adp": 130, "proj_pts": 135 }
 ]
