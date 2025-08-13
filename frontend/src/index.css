@@ -1,3 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* optional sanity check class */
+.tw-check { @apply bg-emerald-300 p-4 rounded-2xl; }
