@@ -165,6 +165,62 @@ const scoringWeights = {
   ppr: { QB: 1.0, RB: 0.98, WR: 1.05, TE: 1.03, DST: 0.6, K: 0.5 },
 } as const;
 
+// ADDED 8.13.2025
+// hard caps (your team)
+const MAX_BY_POSITION: Partial<Record<Position, number>> = {
+  QB: 2,
+  DST: 1,
+  // others unlimited for now
+};
+
+// helper: how many starters at a position are required (no bench/flex)
+const STARTERS_ONLY: Record<Position, number> = {
+  QB: ROSTER_TEMPLATE.QB,
+  RB: ROSTER_TEMPLATE.RB,
+  WR: ROSTER_TEMPLATE.WR,
+  TE: ROSTER_TEMPLATE.TE,
+  DST: ROSTER_TEMPLATE.DST,
+  K: ROSTER_TEMPLATE.K,
+};
+
+// early-round positional priority
+function priorityWeight(pos: Position, round: number): number {
+  // round 1: WR/RB only (QB hard-avoid)
+  if (round === 1) {
+    if (pos === "WR" || pos === "RB") return 1.25;
+    if (pos === "QB") return 0.05; // "no QB round 1"
+    if (pos === "TE") return 0.9;
+    if (pos === "K" || pos === "DST") return 0.05;
+  }
+  // round 2: still heavy WR/RB, QB still discouraged
+  if (round === 2) {
+    if (pos === "WR" || pos === "RB") return 1.2;
+    if (pos === "QB") return 0.4;
+    if (pos === "TE") return 0.95;
+    if (pos === "K" || pos === "DST") return 0.1;
+  }
+  // rounds 3–5: WR/RB lead, QB OK-ish, TE ok, K/DST low
+  if (round >= 3 && round <= 5) {
+    if (pos === "WR" || pos === "RB") return 1.15;
+    if (pos === "QB") return 0.9;
+    if (pos === "TE") return 1.0;
+    if (pos === "K" || pos === "DST") return 0.2;
+  }
+  // rounds 6–9: balanced, K/DST still low
+  if (round >= 6 && round <= 9) {
+    if (pos === "WR" || pos === "RB") return 1.05;
+    if (pos === "QB") return 1.0;
+    if (pos === "TE") return 1.0;
+    if (pos === "K" || pos === "DST") return 0.4;
+  }
+  // rounds 10+: K/DST become acceptable; rest normalized
+  if (round >= 10) {
+    if (pos === "K" || pos === "DST") return 1.0;
+    return 1.0;
+  }
+  return 1.0;
+}
+
 // ---------------- Heuristic Draft Model ----------------
 
 type ModelInputs = {
@@ -184,24 +240,48 @@ function rankPlayers({
 }: ModelInputs) {
   const weights = scoringWeights[settings.scoring];
 
+  // count how many of a pos are on your full roster (inc. FLEX where applicable)
   const countOnRoster = (pos: Position) =>
     (yourRoster[pos]?.length || 0) +
-    ((pos !== "DST" &&
-      pos !== "K" &&
-      (yourRoster["FLEX"]?.filter((p) => p.position === pos).length || 0)) ||
-      0);
-  const needCount = (pos: Position) => {
-    const base = ROSTER_TEMPLATE[pos as keyof typeof ROSTER_TEMPLATE] || 0;
-    const flexOpen = Math.max(
-      0,
-      ROSTER_TEMPLATE.FLEX - (yourRoster["FLEX"]?.length || 0)
-    );
-    const fractionalFlex = FLEX_ELIGIBLE.includes(pos)
-      ? flexOpen / FLEX_ELIGIBLE.length
-      : 0;
-    return Math.max(0, base + fractionalFlex - countOnRoster(pos));
+    (pos !== "DST" && pos !== "K"
+      ? yourRoster["FLEX"]?.filter((p) => p.position === pos).length || 0
+      : 0);
+
+  // starters remaining (excluding bench/flex)
+  const startersRemaining = (pos: Position) => {
+    const have = yourRoster[pos]?.length || 0;
+    const need = STARTERS_ONLY[pos] || 0;
+    return Math.max(0, need - have);
   };
 
+  // FLEX open slots count
+  const flexOpen = Math.max(
+    0,
+    ROSTER_TEMPLATE.FLEX - (yourRoster["FLEX"]?.length || 0)
+  );
+
+  // bye distribution for your current roster (by position)
+  const byeCounts: Record<Position, Record<string, number>> = {
+    QB: {},
+    RB: {},
+    WR: {},
+    TE: {},
+    DST: {},
+    K: {},
+  };
+  (["QB", "RB", "WR", "TE", "DST", "K"] as Position[]).forEach((pos) => {
+    const list = (yourRoster[pos] || []).concat(
+      pos !== "DST" && pos !== "K"
+        ? (yourRoster["FLEX"] || []).filter((p) => p.position === pos)
+        : []
+    );
+    for (const p of list) {
+      const k = String(p.bye ?? "");
+      byeCounts[pos][k] = (byeCounts[pos][k] || 0) + 1;
+    }
+  });
+
+  // group available by pos, sorted by proj
   const byPos: Record<Position, Player[]> = {
     QB: [],
     RB: [],
@@ -252,15 +332,27 @@ function rankPlayers({
     runBias[pos] = settings.runSensitivity * (actual - (evenShare[pos] || 0));
   });
 
+  // compute current round from total picks made
+  const totalPicksMade = Object.values(picksByPos).reduce((a, b) => a + b, 0);
+  const currentRound = Math.max(
+    1,
+    Math.ceil((totalPicksMade + 1) / settings.leagueSize)
+  );
+
   type Scored = { player: Player; score: number; explain: string };
   const scored: Scored[] = [];
 
   for (const p of playerPool) {
     if (takenIds.has(p.id)) continue;
 
+    // enforce caps: skip if we already reached the cap for this position
+    const cap = MAX_BY_POSITION[p.position as Position];
+    if (cap !== undefined && countOnRoster(p.position) >= cap) continue;
+
     const base = (p.proj_pts ?? 0) * (weights[p.position] || 1.0);
     const vor = (p.proj_pts ?? 0) - (replacementValue[p.position] || 0);
 
+    // Team QB influence for WR/TE
     let qbAdj = 0;
     if (
       (p.position === "WR" || p.position === "TE") &&
@@ -273,24 +365,60 @@ function rankPlayers({
         ((passAtt - 520) * 0.02 + (0.3 - qbRun) * 20);
     }
 
-    const need = needCount(p.position);
-    const needBoost = Math.min(1.25, 1 + 0.2 * need);
+    // Starter-first boost: if starter(s) at this position are not yet filled, boost more.
+    const startersLeft = startersRemaining(p.position);
+    // fractional flex share still available for RB/WR/TE
+    const fractionalFlex =
+      FLEX_ELIGIBLE.includes(p.position) && flexOpen > 0
+        ? flexOpen / FLEX_ELIGIBLE.length
+        : 0;
+    const needUnits = startersLeft + fractionalFlex; // how many "useful slots" remain
 
+    // Stronger boost for unfilled starters, lighter if only bench remains
+    const starterBoost = startersLeft > 0 ? 1.35 : 1.0;
+    const benchDamp = startersLeft === 0 ? 0.93 : 1.0; // once starters filled, slightly de-emphasize piling more
+
+    // Pivot bonus (avoid chasing runs)
     const pivotBonus = 1 + Math.max(0, 0.15 - Math.max(0, runBias[p.position]));
 
+    // ADP small helper (overall ADP expected)
     const adpHelp = p.adp ? Math.max(0, (100 - p.adp) * 0.01) : 0;
 
+    // Early-round positional priority (no QB in round 1, WR/RB early, K/DST late)
+    const prio = priorityWeight(p.position, currentRound);
+
+    // Bye diversification: small penalty if we already have 2+ with the same bye in this position
+    let byeAdj = 1.0;
+    if (p.bye != null) {
+      const k = String(p.bye);
+      const already = byeCounts[p.position][k] || 0;
+      if (already >= 2)
+        byeAdj *= 0.94; // avoid stacking 3+ same-bye at same position
+      else if (already === 1) byeAdj *= 0.98;
+    }
+
+    // Final scoring
     const score = base + vor * 1.4 + qbAdj;
-    const finalScore = score * needBoost * pivotBonus + adpHelp;
+    const finalScore =
+      score *
+        (1 + 0.18 * Math.min(2, needUnits)) * // more open "useful slots" => higher weight
+        starterBoost *
+        benchDamp *
+        pivotBonus *
+        prio *
+        byeAdj +
+      adpHelp;
 
     scored.push({
       player: p,
       score: finalScore,
       explain: `base=${base.toFixed(1)} vor=${vor.toFixed(
         1
-      )} qbAdj=${qbAdj.toFixed(1)} needBoost=${needBoost.toFixed(
+      )} qbAdj=${qbAdj.toFixed(1)} starterBoost=${starterBoost.toFixed(
         2
-      )} pivot=${pivotBonus.toFixed(2)} adpHelp=${adpHelp.toFixed(2)}`,
+      )} prio=${prio.toFixed(2)} pivot=${pivotBonus.toFixed(
+        2
+      )} byeAdj=${byeAdj.toFixed(2)} adpHelp=${adpHelp.toFixed(2)}`,
     });
   }
 
@@ -425,17 +553,49 @@ export default function App() {
     [settings, yourRoster, takenSet, players, picksByPos]
   );
 
-  const filtered = useMemo(
-    () =>
-      scored.filter(
-        (s) =>
-          (posFilter === "ALL" || s.player.position === posFilter) &&
-          (filter === "" ||
-            s.player.name.toLowerCase().includes(filter.toLowerCase()) ||
-            (s.player.team || "").toLowerCase().includes(filter.toLowerCase()))
-      ),
-    [scored, filter, posFilter]
-  );
+  // How many you already have at each position
+  const rosterCounts = useMemo(() => {
+    const counts: Record<Position, number> = {
+      QB: 0,
+      RB: 0,
+      WR: 0,
+      TE: 0,
+      DST: 0,
+      K: 0,
+    };
+    for (const id of yourIds) {
+      const p = players.find((x) => x.id === id);
+      if (p) counts[p.position]++;
+    }
+    return counts;
+  }, [yourIds, players]);
+
+  // filter out positions that hit caps, then apply pos/search filters
+  const filtered = useMemo(() => {
+    return scored.filter((s) => {
+      const pos = s.player.position;
+
+      // cap enforcement (e.g., QB ≤ 2, DST ≤ 1)
+      const cap = MAX_BY_POSITION[pos];
+      if (cap !== undefined && rosterCounts[pos] >= cap) return false;
+
+      // position filter chip
+      if (posFilter !== "ALL" && pos !== posFilter) return false;
+
+      // text filter (name or team)
+      if (filter) {
+        const q = filter.toLowerCase();
+        if (
+          !s.player.name.toLowerCase().includes(q) &&
+          !(s.player.team || "").toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [scored, filter, posFilter, rosterCounts]);
 
   const myRecommended = filtered.slice(0, 18);
 
@@ -489,20 +649,6 @@ export default function App() {
     const next = { ...settings, [k]: v };
     setSettings(next);
     api.updateSettings({ [k]: v } as Partial<DraftSettings>).catch(() => {});
-  }
-
-  const rosterCounts: Record<Position, number> = {
-    QB: 0,
-    RB: 0,
-    WR: 0,
-    TE: 0,
-    DST: 0,
-    K: 0,
-  };
-  for (const id of yourIds) {
-    const p = players.find((x) => x.id === id);
-    if (!p) continue;
-    rosterCounts[p.position]++;
   }
 
   return (
