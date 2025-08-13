@@ -1,0 +1,5 @@
+[
+  { "id": 1, "name": "Patrick Mahomes", "position": "QB", "team": "KC" },
+  { "id": 2, "name": "Justin Jefferson", "position": "WR", "team": "MIN" },
+  { "id": 3, "name": "Christian McCaffrey", "position": "RB", "team": "SF" }
+]
