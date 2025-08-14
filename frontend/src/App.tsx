@@ -467,6 +467,24 @@ const SectionCard: React.FC<{
   );
 };
 
+const IconButton: React.FC<{
+  title: string;
+  onClick: () => void;
+  danger?: boolean;
+  children: React.ReactNode;
+}> = ({ title, onClick, danger, children }) => (
+  <button
+    title={title}
+    onClick={onClick}
+    className={`p-2 rounded-xl border hover:bg-gray-50 transition ${
+      danger ? "text-red-600 border-red-200 hover:bg-red-50" : ""
+    }`}
+    aria-label={title}
+  >
+    {children}
+  </button>
+);
+
 export default function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [picks, setPicks] = useState<
@@ -601,6 +619,11 @@ export default function App() {
 
   const totalPicksMade = picks.length;
   const myUpcoming = getUpcomingPickIndexes(settings, totalPicksMade, 12);
+  const currentOverall = picks.length + 1; // the overall pick that would be on the clock now
+  const nextOverall = myUpcoming[0] ?? null; // your next overall pick #
+  const picksUntil = nextOverall
+    ? Math.max(0, nextOverall - currentOverall)
+    : null;
 
   // -------- Sync with backend --------
   async function refreshAll() {
@@ -654,20 +677,35 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        <motion.h1
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-2xl md:text-3xl font-bold mb-2"
-        >
-          Fantasy Draft Assistant (Synced)
-        </motion.h1>
+        <div className="flex items-center justify-between mb-2">
+          <motion.h1
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-2xl md:text-3xl font-bold"
+          >
+            JVLOOKUP - Fantasy Draft Assistant
+          </motion.h1>
+          <div className="flex items-center gap-2">
+            {/* flip the refresh icon for undo */}
+            <IconButton title="Undo last pick" onClick={undoLastPick}>
+              <RefreshCw size={25} className="-scale-x-100" />
+            </IconButton>
+            <IconButton title="Refresh" onClick={refreshAll}>
+              <RefreshCw size={18} />
+            </IconButton>
+
+            <IconButton title="Reset draft" onClick={clearAll} danger>
+              <Trash size={18} />
+            </IconButton>
+          </div>
+        </div>
         <p className="text-gray-600 mb-6">
           Draft helper with live backend sync, roster tracking, and run
           detection. Players are preloaded server-side.
         </p>
 
         {/* Top Controls */}
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
+        <div className="grid md:grid-cols-3 gap-4 mb-4">
           <SectionCard title="Draft Settings" right={<Settings size={18} />}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <label className="text-sm">
@@ -760,34 +798,6 @@ export default function App() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Sync & Admin" right={<Upload size={18} />}>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={refreshAll}
-                className="px-3 py-2 rounded-xl border flex items-center gap-2"
-              >
-                <RefreshCw size={16} /> Refresh
-              </button>
-              <button
-                onClick={undoLastPick}
-                className="px-3 py-2 rounded-xl border flex items-center gap-2"
-              >
-                <RefreshCw size={16} /> Undo Pick
-              </button>
-              <button
-                onClick={clearAll}
-                className="px-3 py-2 rounded-xl border text-red-600 flex items-center gap-2"
-              >
-                <Trash size={16} /> Reset
-              </button>
-            </div>
-            <div className="text-xs text-gray-500 mt-2">
-              Players are served by the backend; to preload, place a{" "}
-              <code>players.csv</code> or <code>players.json</code> on the
-              server and (re)start the backend.
-            </div>
-          </SectionCard>
-
           <SectionCard title="Roster Snapshot" right={<Users size={18} />}>
             <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
               {(
@@ -809,209 +819,166 @@ export default function App() {
               {ROSTER_TEMPLATE.K}
             </div>
           </SectionCard>
+
+          <SectionCard
+            title="Snake Draft Planner"
+            right={
+              <span className="text-xs text-gray-500">upcoming picks</span>
+            }
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Your next picks (overall): {myUpcoming.join(", ") || "—"}
+                <div className="text-xs text-gray-500 mt-1">
+                  Based on league size {settings.leagueSize}, slot{" "}
+                  {settings.draftSlot}, rounds {settings.rounds}.
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-gray-500 uppercase tracking-wide">
+                  Picks until you're up
+                </div>
+                <div className="text-3xl font-bold">{picksUntil ?? "—"}</div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+
+        <div className="mb-4">
+          <SectionCard
+            title="Position Run Radar"
+            right={<span className="text-xs text-gray-500">live trend</span>}
+          >
+            <div className="grid grid-cols-6 gap-2 text-sm">
+              {(Object.keys(picksByPos) as Position[]).map((pos) => (
+                <div
+                  key={pos}
+                  className="rounded-xl border p-2 bg-white flex flex-col"
+                >
+                  <div className="text-gray-500">{pos}</div>
+                  <div className="text-2xl font-semibold">
+                    {picksByPos[pos] || 0}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              As certain positions spike, recommendations will pivot to exploit
+              value rather than chase runs blindly.
+            </div>
+          </SectionCard>
         </div>
 
         {/* Picks & Recommendations */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <SectionCard title="Live Picks & Controls" defaultOpen>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="relative flex-1">
-                <input
-                  className="w-full border rounded-2xl pl-9 pr-3 py-2"
-                  placeholder="Search player or team..."
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-                <Search
-                  size={16}
-                  className="absolute left-3 top-2.5 text-gray-400"
-                />
-              </div>
-              <div className="flex gap-1">
-                {(["ALL", "QB", "RB", "WR", "TE", "DST", "K"] as const).map(
-                  (p) => (
-                    <Chip
-                      key={p}
-                      label={p}
-                      active={posFilter === p}
-                      onClick={() => setPosFilter(p)}
-                    />
-                  )
-                )}
-              </div>
-            </div>
-
-            <div className="border rounded-2xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100 text-gray-600">
-                  <tr>
-                    <th className="text-left p-2">#</th>
-                    <th className="text-left p-2">Player</th>
-                    <th className="text-left p-2">Pos</th>
-                    <th className="text-left p-2">Team</th>
-                    <th className="text-right p-2">Proj</th>
-                    <th className="text-right p-2">ADP</th>
-                    <th className="text-right p-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myRecommended.map((s, i) => (
-                    <tr key={s.player.id} className="border-t">
-                      <td className="p-2">{i + 1}</td>
-                      <td className="p-2 font-medium">{s.player.name}</td>
-                      <td className="p-2">{s.player.position}</td>
-                      <td className="p-2">{s.player.team || ""}</td>
-                      <td className="p-2 text-right">
-                        {s.player.proj_pts?.toFixed(1) ?? "—"}
-                      </td>
-                      <td className="p-2 text-right">{s.player.adp ?? "—"}</td>
-                      <td className="p-2 text-right">
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => markTaken(s.player, "me")}
-                            className="px-2 py-1 rounded-lg border"
-                          >
-                            My Pick
-                          </button>
-                          <button
-                            onClick={() => markTaken(s.player, "other")}
-                            className="px-2 py-1 rounded-lg border"
-                          >
-                            Taken
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
-              <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2">
+        <div className="grid md:grid-cols-3 gap-4 mb-4">
+          <div className="md:col-span-2">
+            <SectionCard title="Live Picks & Controls" defaultOpen>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="relative flex-1">
                   <input
-                    type="checkbox"
-                    checked={showWhy}
-                    onChange={(e) => setShowWhy(e.target.checked)}
-                  />{" "}
-                  Show scoring rationale
-                </label>
+                    className="w-full border rounded-2xl pl-9 pr-3 py-2"
+                    placeholder="Search player or team..."
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                  />
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-2.5 text-gray-400"
+                  />
+                </div>
+                <div className="flex gap-1">
+                  {(["ALL", "QB", "RB", "WR", "TE", "DST", "K"] as const).map(
+                    (p) => (
+                      <Chip
+                        key={p}
+                        label={p}
+                        active={posFilter === p}
+                        onClick={() => setPosFilter(p)}
+                      />
+                    )
+                  )}
+                </div>
               </div>
-              <div>
-                Players loaded: {players.length} · Picks made: {picks.length}
-              </div>
-            </div>
 
-            {showWhy && (
-              <div className="mt-3 text-xs text-gray-600 border rounded-xl p-3 bg-gray-50">
-                {myRecommended.map((s) => (
-                  <div
-                    key={s.player.id}
-                    className="py-1 border-b last:border-b-0"
-                  >
-                    <span className="font-medium">{s.player.name}</span>:{" "}
-                    {s.explain}
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-
-          <div className="md:col-span-2 grid gap-4">
-            <SectionCard
-              title="Snake Draft Planner"
-              right={
-                <span className="text-xs text-gray-500">upcoming picks</span>
-              }
-            >
-              <div className="text-sm text-gray-700">
-                Your next picks (overall numbers):{" "}
-                {myUpcoming.join(", ") || "—"}
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                Based on league size {settings.leagueSize}, slot{" "}
-                {settings.draftSlot}, rounds {settings.rounds}. Auto-updates as
-                picks are logged.
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Position Run Radar"
-              right={<span className="text-xs text-gray-500">live trend</span>}
-            >
-              <div className="grid grid-cols-6 gap-2 text-sm">
-                {(Object.keys(picksByPos) as Position[]).map((pos) => (
-                  <div
-                    key={pos}
-                    className="rounded-xl border p-2 bg-white flex flex-col"
-                  >
-                    <div className="text-gray-500">{pos}</div>
-                    <div className="text-2xl font-semibold">
-                      {picksByPos[pos] || 0}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="text-xs text-gray-500 mt-2">
-                As certain positions spike, recommendations will pivot to
-                exploit value rather than chase runs blindly.
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="All Players (Available)"
-              right={
-                <span className="text-xs text-gray-500">mark picks below</span>
-              }
-            >
-              <div className="max-h-[420px] overflow-auto border rounded-2xl">
+              <div className="border rounded-2xl overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                  <thead className="bg-gray-100 text-gray-600">
                     <tr>
+                      <th className="text-left p-2">#</th>
                       <th className="text-left p-2">Player</th>
                       <th className="text-left p-2">Pos</th>
                       <th className="text-left p-2">Team</th>
                       <th className="text-right p-2">Proj</th>
                       <th className="text-right p-2">ADP</th>
-                      <th className="text-right p-2">Action</th>
+                      <th className="text-right p-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {players
-                      .filter((p) => !takenSet.has(p.id))
-                      .slice(0, 500)
-                      .map((p) => (
-                        <tr key={p.id} className="border-t">
-                          <td className="p-2">{p.name}</td>
-                          <td className="p-2">{p.position}</td>
-                          <td className="p-2">{p.team || ""}</td>
-                          <td className="p-2 text-right">
-                            {p.proj_pts?.toFixed(1) ?? "—"}
-                          </td>
-                          <td className="p-2 text-right">{p.adp ?? "—"}</td>
-                          <td className="p-2 text-right">
-                            <div className="flex gap-2 justify-end">
-                              <button
-                                onClick={() => markTaken(p, "me")}
-                                className="px-2 py-1 rounded-lg border"
-                              >
-                                My Pick
-                              </button>
-                              <button
-                                onClick={() => markTaken(p, "other")}
-                                className="px-2 py-1 rounded-lg border"
-                              >
-                                Taken
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                    {myRecommended.map((s, i) => (
+                      <tr key={s.player.id} className="border-t">
+                        <td className="p-2">{i + 1}</td>
+                        <td className="p-2 font-medium">{s.player.name}</td>
+                        <td className="p-2">{s.player.position}</td>
+                        <td className="p-2">{s.player.team || ""}</td>
+                        <td className="p-2 text-right">
+                          {s.player.proj_pts?.toFixed(1) ?? "—"}
+                        </td>
+                        <td className="p-2 text-right">
+                          {s.player.adp ?? "—"}
+                        </td>
+                        <td className="p-2 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => markTaken(s.player, "me")}
+                              className="px-2 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
+                            >
+                              My Pick
+                            </button>
+                            <button
+                              onClick={() => markTaken(s.player, "other")}
+                              className="px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
+                            >
+                              Taken
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </SectionCard>
+              <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={showWhy}
+                      onChange={(e) => setShowWhy(e.target.checked)}
+                    />{" "}
+                    Show scoring rationale
+                  </label>
+                </div>
+                <div>
+                  Players loaded: {players.length} · Picks made: {picks.length}
+                </div>
+              </div>
 
+              {showWhy && (
+                <div className="mt-3 text-xs text-gray-600 border rounded-xl p-3 bg-gray-50">
+                  {myRecommended.map((s) => (
+                    <div
+                      key={s.player.id}
+                      className="py-1 border-b last:border-b-0"
+                    >
+                      <span className="font-medium">{s.player.name}</span>:{" "}
+                      {s.explain}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          </div>
+          <div className="md:col-span-1 h-full">
             <SectionCard title="Taken Board (All Teams)">
               <div className="text-sm text-gray-700">
                 Chronological list of drafted players. Useful if someone bumps
@@ -1049,6 +1016,62 @@ export default function App() {
               </div>
             </SectionCard>
           </div>
+        </div>
+
+        <div className="mb-6">
+          <SectionCard
+            title="All Players (Available)"
+            right={
+              <span className="text-xs text-gray-500">mark picks below</span>
+            }
+          >
+            <div className="max-h-[420px] overflow-auto border rounded-2xl">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Player</th>
+                    <th className="text-left p-2">Pos</th>
+                    <th className="text-left p-2">Team</th>
+                    <th className="text-right p-2">Proj</th>
+                    <th className="text-right p-2">ADP</th>
+                    <th className="text-right p-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players
+                    .filter((p) => !takenSet.has(p.id))
+                    .slice(0, 500)
+                    .map((p) => (
+                      <tr key={p.id} className="border-t">
+                        <td className="p-2">{p.name}</td>
+                        <td className="p-2">{p.position}</td>
+                        <td className="p-2">{p.team || ""}</td>
+                        <td className="p-2 text-right">
+                          {p.proj_pts?.toFixed(1) ?? "—"}
+                        </td>
+                        <td className="p-2 text-right">{p.adp ?? "—"}</td>
+                        <td className="p-2 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => markTaken(p, "me")}
+                              className="px-2 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
+                            >
+                              My Pick
+                            </button>
+                            <button
+                              onClick={() => markTaken(p, "other")}
+                              className="px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
+                            >
+                              Taken
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
         </div>
 
         {/* Footer */}
