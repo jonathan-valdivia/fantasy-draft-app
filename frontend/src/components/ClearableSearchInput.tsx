@@ -1,6 +1,5 @@
 // components/ClearableSearchInput.tsx
 import { X, Search } from "lucide-react";
-import React from "react";
 
 type Props = {
   value: string;
