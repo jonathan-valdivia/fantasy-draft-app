@@ -1142,7 +1142,7 @@ export default function App() {
             right={<span className="text-xs text-gray-500">by position</span>}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {(["QB", "RB", "WR", "TE", "K", "DST"] as Position[]).map(
+              {(["RB", "WR", "QB", "TE", "K", "DST"] as Position[]).map(
                 (pos) => (
                   <PositionPanel
                     key={pos}
