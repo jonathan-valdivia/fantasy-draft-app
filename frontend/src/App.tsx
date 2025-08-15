@@ -662,6 +662,8 @@ export default function App() {
   const [filter, setFilter] = useState("");
   const [posFilter, setPosFilter] = useState<Position | "ALL">("ALL");
   const [showWhy, setShowWhy] = useState(false);
+  // NEW: which main pane is visible
+  const [activePane, setActivePane] = useState<"PICKER" | "PLAYERS">("PICKER");
 
   const takenSet = useMemo(
     () => new Set(picks.map((p) => p.player_id)),
@@ -895,13 +897,9 @@ export default function App() {
             </IconButton>
           </div>
         </div>
-        <p className="text-gray-600 mb-6">
-          Draft helper with live backend sync, roster tracking, and run
-          detection. Players are preloaded server-side.
-        </p>
 
         {/* Top Controls */}
-        <div className="grid md:grid-cols-2 gap-4 mb-4">
+        <div className="grid md:grid-cols gap-4 mb-4">
           <SectionCard title="Roster Snapshot" right={<Users size={18} />}>
             <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
               {(
@@ -923,7 +921,9 @@ export default function App() {
               {ROSTER_TEMPLATE.K}
             </div>
           </SectionCard>
+        </div>
 
+        <div className="grid grid-cols-3 mb-4">
           <SectionCard
             title="Snake Draft Planner"
             right={
@@ -946,21 +946,18 @@ export default function App() {
               </div>
             </div>
           </SectionCard>
-        </div>
-
-        <div className="mb-4">
           <SectionCard
             title="Position Run Radar"
             right={<span className="text-xs text-gray-500">live trend</span>}
           >
-            <div className="grid grid-cols-6 gap-2 text-sm">
+            <div className="grid grid-cols-3 gap-2 text-sm">
               {(Object.keys(picksByPos) as Position[]).map((pos) => (
                 <div
                   key={pos}
-                  className="rounded-xl border p-2 bg-white flex flex-col"
+                  className="rounded-xl border p-1 bg-white flex flex-col"
                 >
-                  <div className="text-gray-500">{pos}</div>
-                  <div className="text-2xl font-semibold">
+                  <div className="text-xs text-gray-500">{pos}</div>
+                  <div className="text-md font-semibold">
                     {picksByPos[pos] || 0}
                   </div>
                 </div>
@@ -971,192 +968,215 @@ export default function App() {
               value rather than chase runs blindly.
             </div>
           </SectionCard>
+          <SectionCard
+            title="Last 4 Picks"
+            className="h-full"
+            bodyClassName="flex flex-col min-h-0"
+          >
+            {/* This is the only part that grows and scrolls */}
+            <div className="flex-1 min-h-0 overflow-auto border rounded">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                  <tr>
+                    <th className="text-left">#</th>
+                    <th className="text-left ">Player</th>
+                    <th className="text-left ">Pos</th>
+                    <th className="text-left">Team</th>
+                    <th className="text-right ">Owner</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {picksDesc.slice(0, 4).map((row, i) => {
+                    const p = players.find((x) => x.id === row.player_id);
+                    if (!p) return null;
+                    const displayNumber = picks.length - i; // newest first
+                    return (
+                      <tr key={`${row.player_id}-${i}`} className="border-t">
+                        <td className="p-2">{displayNumber}</td>
+                        <td className="p-2">{p.name}</td>
+                        <td className="p-2">{p.position}</td>
+                        <td className="p-2">{p.team || ""}</td>
+                        <td className="p-2 text-right">
+                          {row.owner === "me" ? "You" : "Other"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* Switch between the two main panes */}
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setActivePane("PICKER")}
+            className={`px-3 py-1 rounded-full border text-xl ${
+              activePane === "PICKER"
+                ? "bg-emerald-500 text-white border"
+                : "hover:bg-black/5"
+            }`}
+          >
+            Picker
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivePane("PLAYERS")}
+            className={`px-3 py-1 rounded-full border text-xl ${
+              activePane === "PLAYERS"
+                ? "bg-emerald-500 text-white border"
+                : "hover:bg-black/5"
+            }`}
+          >
+            All Players
+          </button>
         </div>
 
         {/* Picks & Recommendations */}
-        <div className="grid md:grid-cols-3 gap-4 mb-4 items-stretch">
-          <div className="md:col-span-2" ref={leftColRef}>
-            <SectionCard title="Live Picks & Controls" defaultOpen>
-              <ClearableSearchInput
-                value={filter}
-                onChange={setFilter}
-                placeholder="Search player or team…"
-                className="w-full"
-              />
-              <div className="flex flex-wrap gap-2 mt-3">
-                {POSITIONS.map((p) => {
-                  const isActive = posFilter === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      aria-pressed={isActive}
-                      onClick={() => setPosFilter(p)}
-                      className={`px-3 py-1 rounded-full border text-sm
+        {/* MAIN PANE: Picker */}
+        {activePane === "PICKER" && (
+          <div className="grid md:grid-cols gap-4 mb-4 items-stretch">
+            <div className="md:col-span-2" ref={leftColRef}>
+              <SectionCard title="Live Picks & Controls" defaultOpen>
+                <ClearableSearchInput
+                  value={filter}
+                  onChange={setFilter}
+                  placeholder="Search player or team…"
+                  className="w-full"
+                />
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {POSITIONS.map((p) => {
+                    const isActive = posFilter === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setPosFilter(p)}
+                        className={`px-3 py-1 rounded-full border text-sm
             ${
               isActive ? "bg-black text-white border-black" : "hover:bg-black/5"
             }`}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="border rounded-2xl overflow-hidden mt-3">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100 text-gray-600">
-                    <tr>
-                      <th className="text-left p-2">#</th>
-                      <th className="text-left p-2">Player</th>
-                      <th className="text-left p-2">Pos</th>
-                      <th className="text-left p-2">Team</th>
-                      <th className="text-right p-2">Proj</th>
-                      <th className="text-right p-2">ADP</th>
-                      <th className="text-right p-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myRecommended.map((s, i) => (
-                      <tr key={s.player.id} className="border-t">
-                        <td className="p-2">{i + 1}</td>
-                        <td className="p-2 font-medium">{s.player.name}</td>
-                        <td className="p-2">{s.player.position}</td>
-                        <td className="p-2">{s.player.team || ""}</td>
-                        <td className="p-2 text-right">
-                          {s.player.proj_pts?.toFixed(1) ?? "—"}
-                        </td>
-                        <td className="p-2 text-right">
-                          {s.player.adp ?? "—"}
-                        </td>
-                        <td className="p-2 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => markTaken(s.player, "me")}
-                              className="px-2 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
-                            >
-                              My Pick
-                            </button>
-                            <button
-                              onClick={() => markTaken(s.player, "other")}
-                              className="px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
-                            >
-                              Taken
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
-                <div className="flex items-center gap-3">
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={showWhy}
-                      onChange={(e) => setShowWhy(e.target.checked)}
-                    />{" "}
-                    Show scoring rationale
-                  </label>
-                </div>
-                <div>
-                  Players loaded: {players.length} · Picks made: {picks.length}
-                </div>
-              </div>
-
-              {showWhy && (
-                <div className="mt-3 text-xs text-gray-600 border rounded-xl p-3 bg-gray-50">
-                  {myRecommended.map((s) => (
-                    <div
-                      key={s.player.id}
-                      className="py-1 border-b last:border-b-0"
-                    >
-                      <span className="font-medium">{s.player.name}</span>:{" "}
-                      {s.explain}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          </div>
-          <div className="md:col-span-1 min-h-0">
-            {/* Limit the Taken card to the left card's height */}
-            <div
-              className="h-full overflow-hidden"
-              style={leftHeight ? { maxHeight: leftHeight } : undefined}
-            >
-              <SectionCard
-                title="Taken Board (All Teams)"
-                className="h-full"
-                bodyClassName="flex flex-col min-h-0"
-              >
-                <div className="text-sm text-gray-700">
-                  Taken players, listed most recent at the top.
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* This is the only part that grows and scrolls */}
-                <div className="flex-1 min-h-0 overflow-auto border rounded-2xl mt-2">
+                <div className="border rounded-2xl overflow-hidden mt-3">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                    <thead className="bg-gray-100 text-gray-600">
                       <tr>
                         <th className="text-left p-2">#</th>
                         <th className="text-left p-2">Player</th>
                         <th className="text-left p-2">Pos</th>
                         <th className="text-left p-2">Team</th>
-                        <th className="text-right p-2">Owner</th>
+                        <th className="text-right p-2">Proj</th>
+                        <th className="text-right p-2">ADP</th>
+                        <th className="text-right p-2">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {picksDesc.map((row, i) => {
-                        const p = players.find((x) => x.id === row.player_id);
-                        if (!p) return null;
-                        const displayNumber = picks.length - i; // newest first
-                        return (
-                          <tr
-                            key={`${row.player_id}-${i}`}
-                            className="border-t"
-                          >
-                            <td className="p-2">{displayNumber}</td>
-                            <td className="p-2">{p.name}</td>
-                            <td className="p-2">{p.position}</td>
-                            <td className="p-2">{p.team || ""}</td>
-                            <td className="p-2 text-right">
-                              {row.owner === "me" ? "You" : "Other"}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {myRecommended.map((s, i) => (
+                        <tr key={s.player.id} className="border-t">
+                          <td className="p-2">{i + 1}</td>
+                          <td className="p-2 font-medium">{s.player.name}</td>
+                          <td className="p-2">{s.player.position}</td>
+                          <td className="p-2">{s.player.team || ""}</td>
+                          <td className="p-2 text-right">
+                            {s.player.proj_pts?.toFixed(1) ?? "—"}
+                          </td>
+                          <td className="p-2 text-right">
+                            {s.player.adp ?? "—"}
+                          </td>
+                          <td className="p-2 text-right">
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => markTaken(s.player, "me")}
+                                className="px-2 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
+                              >
+                                My Pick
+                              </button>
+                              <button
+                                onClick={() => markTaken(s.player, "other")}
+                                className="px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
+                              >
+                                Taken
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={showWhy}
+                        onChange={(e) => setShowWhy(e.target.checked)}
+                      />{" "}
+                      Show scoring rationale
+                    </label>
+                  </div>
+                  <div>
+                    Players loaded: {players.length} · Picks made:{" "}
+                    {picks.length}
+                  </div>
+                </div>
+
+                {showWhy && (
+                  <div className="mt-3 text-xs text-gray-600 border rounded-xl p-3 bg-gray-50">
+                    {myRecommended.map((s) => (
+                      <div
+                        key={s.player.id}
+                        className="py-1 border-b last:border-b-0"
+                      >
+                        <span className="font-medium">{s.player.name}</span>:{" "}
+                        {s.explain}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </SectionCard>
             </div>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <SectionCard
-            title="All Players (Available)"
-            right={<span className="text-xs text-gray-500">by position</span>}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {(["RB", "WR", "QB", "TE", "K", "DST"] as Position[]).map(
-                (pos) => (
-                  <PositionPanel
-                    key={pos}
-                    title={pos}
-                    players={playersByPos[pos]}
-                    onMyPick={(p) => markTaken(p, "me")}
-                    onOtherPick={(p) => markTaken(p, "other")}
-                  />
-                )
-              )}
+            <div className="md:col-span-1 min-h-0">
+              {/* Limit the Taken card to the left card's height */}
+              <div
+                className="h-full overflow-hidden"
+                style={leftHeight ? { maxHeight: leftHeight } : undefined}
+              ></div>
             </div>
-          </SectionCard>
-        </div>
-
+          </div>
+        )}
+        {/* MAIN PANE: All Players */}
+        {activePane === "PLAYERS" && (
+          <div className="mb-6">
+            <SectionCard
+              title="All Players (Available)"
+              right={<span className="text-xs text-gray-500">by position</span>}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {(["RB", "WR", "QB", "TE", "K", "DST"] as Position[]).map(
+                  (pos) => (
+                    <PositionPanel
+                      key={pos}
+                      title={pos}
+                      players={playersByPos[pos]}
+                      onMyPick={(p) => markTaken(p, "me")}
+                      onOtherPick={(p) => markTaken(p, "other")}
+                    />
+                  )
+                )}
+              </div>
+            </SectionCard>
+          </div>
+        )}
         <Modal
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
