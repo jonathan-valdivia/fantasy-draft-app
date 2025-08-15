@@ -566,7 +566,7 @@ const PositionPanel: React.FC<{
   players: Player[];
   onMyPick: (p: Player) => void;
   onOtherPick: (p: Player) => void;
-}> = ({ title, players, onMyPick, onOtherPick }) => {
+}> = ({ title, players, onOtherPick }) => {
   const [q, setQ] = useState("");
 
   const filtered = useMemo(() => {
