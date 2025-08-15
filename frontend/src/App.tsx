@@ -558,7 +558,7 @@ const POS_BG: Record<Position, string> = {
   TE: "bg-green-50",
   QB: "bg-yellow-50",
   DST: "bg-gray-50",
-  K: "bg-black/5", // "very light black"
+  K: "bg-black/15", // "very light black"
 };
 
 const PositionPanel: React.FC<{
@@ -810,7 +810,7 @@ export default function App() {
   }, [scored, filter, posFilter, rosterCounts]);
 
   // change the amount of players that show in recommended
-  const myRecommended = filtered.slice(0, 10);
+  const myRecommended = filtered.slice(0, 18);
 
   const totalPicksMade = picks.length;
   const myUpcoming = getUpcomingPickIndexes(settings, totalPicksMade, 12);
