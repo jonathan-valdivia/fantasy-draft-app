@@ -135,25 +135,34 @@ const api = {
   },
 };
 
-// Compute upcoming pick numbers for snake draft given slot and round count
+// Compute upcoming overall pick numbers for your slot in a snake draft
 const getUpcomingPickIndexes = (
   settings: DraftSettings,
   totalPicksMade: number,
-  lookahead = 24
+  count = 24 // just how many you want back; not a window
 ) => {
-  const picks: number[] = [];
-  const { leagueSize, draftSlot } = settings;
-  let pickIndex = totalPicksMade + 1; // 1-based
-  const lastPick = settings.rounds * leagueSize;
-  while (picks.length < lookahead && pickIndex <= lastPick) {
-    const round = Math.ceil(pickIndex / leagueSize);
-    const isOdd = round % 2 === 1;
-    const pickInRound = ((pickIndex - 1) % leagueSize) + 1;
-    const drafter = isOdd ? pickInRound : leagueSize - pickInRound + 1;
-    if (drafter === draftSlot) picks.push(pickIndex);
-    pickIndex++;
+  const { leagueSize, draftSlot, rounds } = settings;
+  const startPick = totalPicksMade + 1; // overall pick that is on the clock
+  const lastPick = rounds * leagueSize;
+
+  const upcoming: number[] = [];
+
+  // Start from the round that contains startPick and walk to the end
+  for (let r = Math.ceil(startPick / leagueSize); r <= rounds; r++) {
+    const firstOfRound = (r - 1) * leagueSize + 1;
+
+    // In odd rounds slots go 1..N, in even rounds N..1
+    const myPickThisRound =
+      r % 2 === 1
+        ? firstOfRound + (draftSlot - 1)
+        : firstOfRound + (leagueSize - draftSlot);
+
+    if (myPickThisRound >= startPick && myPickThisRound <= lastPick) {
+      upcoming.push(myPickThisRound);
+      if (upcoming.length >= count) break;
+    }
   }
-  return picks;
+  return upcoming;
 };
 
 // Replacement level baselines by position (rough initial assumptions)
@@ -179,7 +188,7 @@ const MAX_BY_POSITION: Partial<Record<Position, number>> = {
   QB: 2,
   DST: 1,
   K: 1,
-  TE: 1,
+  TE: 2,
   // others unlimited for now
 };
 
@@ -557,6 +566,16 @@ const Modal: React.FC<{
   );
 };
 
+// very light tints for each position
+const POS_BG: Record<Position, string> = {
+  WR: "bg-blue-50",
+  RB: "bg-red-50",
+  TE: "bg-green-50",
+  QB: "bg-yellow-50",
+  DST: "bg-gray-50",
+  K: "bg-black/5", // "very light black"
+};
+
 const PositionPanel: React.FC<{
   title: Position;
   players: Player[];
@@ -576,7 +595,7 @@ const PositionPanel: React.FC<{
   }, [q, players]);
 
   return (
-    <div className="border rounded-2xl p-3 bg-white">
+    <div className={`border rounded-2xl p-3 ${POS_BG[title]}`}>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="font-semibold">{title}</h3>
       </div>
@@ -590,7 +609,7 @@ const PositionPanel: React.FC<{
 
       <div className="max-h-72 overflow-y-auto rounded-lg">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-white">
+          <thead className="sticky top-0 bg-white/70 backdrop-blur">
             <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:px-2">
               <th className="w-1/2">Player</th>
               <th>Team</th>
