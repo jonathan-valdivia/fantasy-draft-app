@@ -447,21 +447,6 @@ function rankPlayers({
 
 // ----------------------- UI -----------------------
 
-const Chip: React.FC<{
-  label: string;
-  onClick?: () => void;
-  active?: boolean;
-}> = ({ label, onClick, active }) => (
-  <button
-    onClick={onClick}
-    className={`px-3 py-1 rounded-full border text-sm ${
-      active ? "bg-black text-white" : "bg-white"
-    }`}
-  >
-    {label}
-  </button>
-);
-
 // add props: className, bodyClassName
 const SectionCard: React.FC<{
   title: string;
