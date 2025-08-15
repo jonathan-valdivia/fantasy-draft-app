@@ -1,16 +1,21 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { motion } from "framer-motion";
 import {
-  Search,
   Save,
   Trash,
   Settings,
   Users,
   ChevronRight,
   ChevronDown,
-  RefreshCw,
   HelpCircle,
 } from "lucide-react";
+import ClearableSearchInput from "./components/ClearableSearchInput";
 
 /**
  * Fantasy Draft Assistant (MVP) — Backend Synced
@@ -71,6 +76,10 @@ type DraftSettings = {
   teamQBInfluence: number; // how much QB volume influences WR/TE (0-1)
   runSensitivity: number; // how much to react to positional runs (0-2)
 };
+
+type Pos = "ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+
+const POSITIONS: Pos[] = ["ALL", "QB", "RB", "WR", "TE", "K", "DST"];
 
 // Roster template
 const ROSTER_TEMPLATE: Record<string, number> = {
@@ -169,6 +178,8 @@ const scoringWeights = {
 const MAX_BY_POSITION: Partial<Record<Position, number>> = {
   QB: 2,
   DST: 1,
+  K: 1,
+  TE: 1,
   // others unlimited for now
 };
 
@@ -442,15 +453,25 @@ const Chip: React.FC<{
   </button>
 );
 
+// add props: className, bodyClassName
 const SectionCard: React.FC<{
   title: string;
   children: any;
   defaultOpen?: boolean;
   right?: React.ReactNode;
-}> = ({ title, children, defaultOpen = true, right }) => {
+  className?: string;
+  bodyClassName?: string;
+}> = ({
+  title,
+  children,
+  defaultOpen = true,
+  right,
+  className = "",
+  bodyClassName = "",
+}) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-2xl shadow p-4 bg-white">
+    <div className={`rounded-2xl shadow p-4 bg-white ${className}`}>
       <div
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setOpen(!open)}
@@ -461,7 +482,7 @@ const SectionCard: React.FC<{
         </div>
         <div className="flex items-center gap-3">{right}</div>
       </div>
-      {open && <div className="pt-3">{children}</div>}
+      {open && <div className={`pt-3 ${bodyClassName}`}>{children}</div>}
     </div>
   );
 };
@@ -483,6 +504,134 @@ const IconButton: React.FC<{
     {children}
   </button>
 );
+
+const Modal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+}> = ({ open, onClose, title, children }) => {
+  // close on ESC, lock body scroll
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      aria-modal="true"
+      role="dialog"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
+      {/* Panel */}
+      <div
+        className="relative bg-white rounded-2xl shadow-xl w-[min(96vw,820px)] max-h-[85vh] overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <button
+            onClick={onClose}
+            className="px-2 py-1 rounded-lg border hover:bg-gray-50 text-sm"
+          >
+            Close
+          </button>
+        </div>
+        <div className="p-4">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+const PositionPanel: React.FC<{
+  title: Position;
+  players: Player[];
+  onMyPick: (p: Player) => void;
+  onOtherPick: (p: Player) => void;
+}> = ({ title, players, onMyPick, onOtherPick }) => {
+  const [q, setQ] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!q) return players;
+    const s = q.toLowerCase();
+    return players.filter(
+      (p) =>
+        p.name.toLowerCase().includes(s) ||
+        (p.team || "").toLowerCase().includes(s)
+    );
+  }, [q, players]);
+
+  return (
+    <div className="border rounded-2xl p-3 bg-white">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="font-semibold">{title}</h3>
+      </div>
+
+      <ClearableSearchInput
+        value={q}
+        onChange={setQ}
+        placeholder={`Search ${title}…`}
+        className="mb-2"
+      />
+
+      <div className="max-h-72 overflow-y-auto rounded-lg">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white">
+            <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:px-2">
+              <th className="w-1/2">Player</th>
+              <th>Team</th>
+              <th className="text-right">Proj</th>
+              <th className="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((p) => (
+              <tr key={p.id} className="border-t">
+                <td className="py-1.5 px-2">{p.name}</td>
+                <td className="py-1.5 px-2">{p.team || ""}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums">
+                  {p.proj_pts?.toFixed(1) ?? "—"}
+                </td>
+                <td className="py-1.5 px-2 text-right">
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
+                      onClick={() => onOtherPick(p)}
+                    >
+                      Taken
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-sm opacity-60">
+                  No players match your search.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -519,6 +668,46 @@ export default function App() {
     [picks]
   );
 
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const [leftHeight, setLeftHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (!leftColRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect?.height || 0;
+      setLeftHeight(h);
+    });
+    ro.observe(leftColRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const picksDesc = useMemo(() => [...picks].reverse(), [picks]);
+
+  const availablePlayers = useMemo(
+    () => players.filter((p) => !takenSet.has(p.id)),
+    [players, takenSet]
+  );
+
+  const playersByPos = useMemo(() => {
+    const map: Record<Position, Player[]> = {
+      QB: [],
+      RB: [],
+      WR: [],
+      TE: [],
+      DST: [],
+      K: [],
+    };
+    for (const p of availablePlayers) {
+      map[p.position].push(p);
+    }
+    (["QB", "RB", "WR", "TE", "K", "DST"] as Position[]).forEach((pos) => {
+      map[pos].sort((a, b) => (b.proj_pts ?? 0) - (a.proj_pts ?? 0));
+    });
+    return map;
+  }, [availablePlayers]);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   function findSlotForPlayer(p: Player, by: Record<string, Player[]>) {
     const need = (slot: string, count: number) =>
       (by[slot]?.length || 0) < count;
@@ -526,6 +715,8 @@ export default function App() {
     if (p.position === "RB" && need("RB", ROSTER_TEMPLATE.RB)) return "RB";
     if (p.position === "WR" && need("WR", ROSTER_TEMPLATE.WR)) return "WR";
     if (p.position === "TE" && need("TE", ROSTER_TEMPLATE.TE)) return "TE";
+    if (p.position === "DST" && need("DST", ROSTER_TEMPLATE.DST)) return "DST";
+    if (p.position === "K" && need("K", ROSTER_TEMPLATE.K)) return "K";
     if (
       FLEX_ELIGIBLE.includes(p.position) &&
       need("FLEX", ROSTER_TEMPLATE.FLEX)
@@ -614,7 +805,8 @@ export default function App() {
     });
   }, [scored, filter, posFilter, rosterCounts]);
 
-  const myRecommended = filtered.slice(0, 18);
+  // change the amount of players that show in recommended
+  const myRecommended = filtered.slice(0, 10);
 
   const totalPicksMade = picks.length;
   const myUpcoming = getUpcomingPickIndexes(settings, totalPicksMade, 12);
@@ -685,14 +877,15 @@ export default function App() {
             JVLOOKUP - Fantasy Draft Assistant
           </motion.h1>
           <div className="flex items-center gap-2">
-            {/* flip the refresh icon for undo */}
+            <IconButton
+              title="Draft settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings size={18} />
+            </IconButton>
             <IconButton title="Undo last pick" onClick={undoLastPick}>
-              <RefreshCw size={25} className="-scale-x-100" />
+              UNDO
             </IconButton>
-            <IconButton title="Refresh" onClick={refreshAll}>
-              <RefreshCw size={18} />
-            </IconButton>
-
             <IconButton title="Reset draft" onClick={clearAll} danger>
               <Trash size={18} />
             </IconButton>
@@ -704,99 +897,7 @@ export default function App() {
         </p>
 
         {/* Top Controls */}
-        <div className="grid md:grid-cols-3 gap-4 mb-4">
-          <SectionCard title="Draft Settings" right={<Settings size={18} />}>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <label className="text-sm">
-                <span className="block text-gray-600">League Size</span>
-                <input
-                  type="number"
-                  min={6}
-                  max={20}
-                  value={settings.leagueSize}
-                  onChange={(e) =>
-                    updateSetting("leagueSize", Number(e.target.value))
-                  }
-                  className="w-full border rounded-xl px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="block text-gray-600">Your Draft Slot</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={settings.leagueSize}
-                  value={settings.draftSlot}
-                  onChange={(e) =>
-                    updateSetting("draftSlot", Number(e.target.value))
-                  }
-                  className="w-full border rounded-xl px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="block text-gray-600">Rounds</span>
-                <input
-                  type="number"
-                  min={12}
-                  max={25}
-                  value={settings.rounds}
-                  onChange={(e) =>
-                    updateSetting("rounds", Number(e.target.value))
-                  }
-                  className="w-full border rounded-xl px-3 py-2"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="block text-gray-600">Scoring</span>
-                <select
-                  value={settings.scoring}
-                  onChange={(e) =>
-                    updateSetting("scoring", e.target.value as any)
-                  }
-                  className="w-full border rounded-xl px-3 py-2"
-                >
-                  <option value="standard">Standard</option>
-                  <option value="half">Half-PPR</option>
-                  <option value="ppr">Full PPR</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                <span className="block text-gray-600">
-                  WR/TE ↔ Team QB Influence
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={settings.teamQBInfluence}
-                  onChange={(e) =>
-                    updateSetting("teamQBInfluence", Number(e.target.value))
-                  }
-                  className="w-full"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="block text-gray-600">Run Sensitivity</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={settings.runSensitivity}
-                  onChange={(e) =>
-                    updateSetting("runSensitivity", Number(e.target.value))
-                  }
-                  className="w-full"
-                />
-              </label>
-            </div>
-            <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
-              <HelpCircle size={14} /> Settings auto-sync to all connected
-              devices.
-            </div>
-          </SectionCard>
-
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
           <SectionCard title="Roster Snapshot" right={<Users size={18} />}>
             <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
               {(
@@ -869,37 +970,36 @@ export default function App() {
         </div>
 
         {/* Picks & Recommendations */}
-        <div className="grid md:grid-cols-3 gap-4 mb-4">
-          <div className="md:col-span-2">
+        <div className="grid md:grid-cols-3 gap-4 mb-4 items-stretch">
+          <div className="md:col-span-2" ref={leftColRef}>
             <SectionCard title="Live Picks & Controls" defaultOpen>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="relative flex-1">
-                  <input
-                    className="w-full border rounded-2xl pl-9 pr-3 py-2"
-                    placeholder="Search player or team..."
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                  />
-                  <Search
-                    size={16}
-                    className="absolute left-3 top-2.5 text-gray-400"
-                  />
-                </div>
-                <div className="flex gap-1">
-                  {(["ALL", "QB", "RB", "WR", "TE", "DST", "K"] as const).map(
-                    (p) => (
-                      <Chip
-                        key={p}
-                        label={p}
-                        active={posFilter === p}
-                        onClick={() => setPosFilter(p)}
-                      />
-                    )
-                  )}
-                </div>
+              <ClearableSearchInput
+                value={filter}
+                onChange={setFilter}
+                placeholder="Search player or team…"
+                className="w-full"
+              />
+              <div className="flex flex-wrap gap-2 mt-3">
+                {POSITIONS.map((p) => {
+                  const isActive = posFilter === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setPosFilter(p)}
+                      className={`px-3 py-1 rounded-full border text-sm
+            ${
+              isActive ? "bg-black text-white border-black" : "hover:bg-black/5"
+            }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="border rounded-2xl overflow-hidden">
+              <div className="border rounded-2xl overflow-hidden mt-3">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100 text-gray-600">
                     <tr>
@@ -977,101 +1077,188 @@ export default function App() {
               )}
             </SectionCard>
           </div>
-          <div className="md:col-span-1 h-full">
-            <SectionCard title="Taken Board (All Teams)">
-              <div className="text-sm text-gray-700">
-                Chronological list of drafted players. Useful if someone bumps
-                the sticker board.
-              </div>
-              <div className="max-h-[260px] overflow-auto border rounded-2xl mt-2">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100 text-gray-600 sticky top-0">
-                    <tr>
-                      <th className="text-left p-2">#</th>
-                      <th className="text-left p-2">Player</th>
-                      <th className="text-left p-2">Pos</th>
-                      <th className="text-left p-2">Team</th>
-                      <th className="text-right p-2">Owner</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {picks.map((row, i) => {
-                      const p = players.find((x) => x.id === row.player_id);
-                      if (!p) return null;
-                      return (
-                        <tr key={`${row.player_id}-${i}`} className="border-t">
-                          <td className="p-2">{i + 1}</td>
-                          <td className="p-2">{p.name}</td>
-                          <td className="p-2">{p.position}</td>
-                          <td className="p-2">{p.team || ""}</td>
-                          <td className="p-2 text-right">
-                            {row.owner === "me" ? "You" : "Other"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </SectionCard>
+          <div className="md:col-span-1 min-h-0">
+            {/* Limit the Taken card to the left card's height */}
+            <div
+              className="h-full overflow-hidden"
+              style={leftHeight ? { maxHeight: leftHeight } : undefined}
+            >
+              <SectionCard
+                title="Taken Board (All Teams)"
+                className="h-full"
+                bodyClassName="flex flex-col min-h-0"
+              >
+                <div className="text-sm text-gray-700">
+                  Taken players, listed most recent at the top.
+                </div>
+
+                {/* This is the only part that grows and scrolls */}
+                <div className="flex-1 min-h-0 overflow-auto border rounded-2xl mt-2">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2">#</th>
+                        <th className="text-left p-2">Player</th>
+                        <th className="text-left p-2">Pos</th>
+                        <th className="text-left p-2">Team</th>
+                        <th className="text-right p-2">Owner</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {picksDesc.map((row, i) => {
+                        const p = players.find((x) => x.id === row.player_id);
+                        if (!p) return null;
+                        const displayNumber = picks.length - i; // newest first
+                        return (
+                          <tr
+                            key={`${row.player_id}-${i}`}
+                            className="border-t"
+                          >
+                            <td className="p-2">{displayNumber}</td>
+                            <td className="p-2">{p.name}</td>
+                            <td className="p-2">{p.position}</td>
+                            <td className="p-2">{p.team || ""}</td>
+                            <td className="p-2 text-right">
+                              {row.owner === "me" ? "You" : "Other"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+            </div>
           </div>
         </div>
 
         <div className="mb-6">
           <SectionCard
             title="All Players (Available)"
-            right={
-              <span className="text-xs text-gray-500">mark picks below</span>
-            }
+            right={<span className="text-xs text-gray-500">by position</span>}
           >
-            <div className="max-h-[420px] overflow-auto border rounded-2xl">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100 text-gray-600 sticky top-0">
-                  <tr>
-                    <th className="text-left p-2">Player</th>
-                    <th className="text-left p-2">Pos</th>
-                    <th className="text-left p-2">Team</th>
-                    <th className="text-right p-2">Proj</th>
-                    <th className="text-right p-2">ADP</th>
-                    <th className="text-right p-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {players
-                    .filter((p) => !takenSet.has(p.id))
-                    .slice(0, 500)
-                    .map((p) => (
-                      <tr key={p.id} className="border-t">
-                        <td className="p-2">{p.name}</td>
-                        <td className="p-2">{p.position}</td>
-                        <td className="p-2">{p.team || ""}</td>
-                        <td className="p-2 text-right">
-                          {p.proj_pts?.toFixed(1) ?? "—"}
-                        </td>
-                        <td className="p-2 text-right">{p.adp ?? "—"}</td>
-                        <td className="p-2 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <button
-                              onClick={() => markTaken(p, "me")}
-                              className="px-2 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
-                            >
-                              My Pick
-                            </button>
-                            <button
-                              onClick={() => markTaken(p, "other")}
-                              className="px-2 py-1 rounded-lg bg-rose-500 text-white hover:bg-rose-600"
-                            >
-                              Taken
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {(["QB", "RB", "WR", "TE", "K", "DST"] as Position[]).map(
+                (pos) => (
+                  <PositionPanel
+                    key={pos}
+                    title={pos}
+                    players={playersByPos[pos]}
+                    onMyPick={(p) => markTaken(p, "me")}
+                    onOtherPick={(p) => markTaken(p, "other")}
+                  />
+                )
+              )}
             </div>
           </SectionCard>
         </div>
+
+        <Modal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          title="Draft Settings"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="text-sm">
+              <span className="block text-gray-600">League Size</span>
+              <input
+                type="number"
+                min={6}
+                max={20}
+                value={settings.leagueSize}
+                onChange={(e) =>
+                  updateSetting("leagueSize", Number(e.target.value))
+                }
+                className="w-full border rounded-xl px-3 py-2"
+                autoFocus
+              />
+            </label>
+            <label className="text-sm">
+              <span className="block text-gray-600">Your Draft Slot</span>
+              <input
+                type="number"
+                min={1}
+                max={settings.leagueSize}
+                value={settings.draftSlot}
+                onChange={(e) =>
+                  updateSetting("draftSlot", Number(e.target.value))
+                }
+                className="w-full border rounded-xl px-3 py-2"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="block text-gray-600">Rounds</span>
+              <input
+                type="number"
+                min={12}
+                max={25}
+                value={settings.rounds}
+                onChange={(e) =>
+                  updateSetting("rounds", Number(e.target.value))
+                }
+                className="w-full border rounded-xl px-3 py-2"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="block text-gray-600">Scoring</span>
+              <select
+                value={settings.scoring}
+                onChange={(e) =>
+                  updateSetting("scoring", e.target.value as any)
+                }
+                className="w-full border rounded-xl px-3 py-2"
+              >
+                <option value="standard">Standard</option>
+                <option value="half">Half-PPR</option>
+                <option value="ppr">Full PPR</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="block text-gray-600">
+                WR/TE ↔ Team QB Influence
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={settings.teamQBInfluence}
+                onChange={(e) =>
+                  updateSetting("teamQBInfluence", Number(e.target.value))
+                }
+                className="w-full"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="block text-gray-600">Run Sensitivity</span>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
+                value={settings.runSensitivity}
+                onChange={(e) =>
+                  updateSetting("runSensitivity", Number(e.target.value))
+                }
+                className="w-full"
+              />
+            </label>
+          </div>
+
+          <div className="text-xs text-gray-500 mt-3 flex items-center gap-2">
+            <HelpCircle size={14} /> Settings auto-sync to all connected
+            devices.
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={() => setSettingsOpen(false)}
+              className="px-3 py-2 rounded-xl border hover:bg-gray-50"
+            >
+              Done
+            </button>
+          </div>
+        </Modal>
 
         {/* Footer */}
         <div className="mt-6 text-xs text-gray-500 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
