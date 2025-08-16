@@ -969,7 +969,7 @@ export default function App() {
             </div>
           </SectionCard>
           <SectionCard
-            title="Last 4 Picks"
+            title="Last 3 Picks"
             className="h-full"
             bodyClassName="flex flex-col min-h-0"
           >
@@ -986,18 +986,23 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {picksDesc.slice(0, 4).map((row, i) => {
+                  {picksDesc.slice(0, 3).map((row, i) => {
                     const p = players.find((x) => x.id === row.player_id);
                     if (!p) return null;
                     const displayNumber = picks.length - i; // newest first
                     return (
-                      <tr key={`${row.player_id}-${i}`} className="border-t">
+                      <tr
+                        key={`${row.player_id}-${i}`}
+                        className={`border-t transition-colors ${
+                          row.owner === "me" ? "bg-yellow-100" : ""
+                        }`}
+                      >
                         <td className="p-2">{displayNumber}</td>
                         <td className="p-2">{p.name}</td>
                         <td className="p-2">{p.position}</td>
                         <td className="p-2">{p.team || ""}</td>
                         <td className="p-2 text-right">
-                          {row.owner === "me" ? "You" : "Other"}
+                          {row.owner === "me" ? "JV" : "Other"}
                         </td>
                       </tr>
                     );
