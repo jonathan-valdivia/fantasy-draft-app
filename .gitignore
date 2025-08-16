@@ -1,2 +1,14 @@
-.venv/*
-tools/*
+# Ignore Python venv
+.venv/
+venv/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore IDE/editor stuff
+.vscode/
+.idea/
+
+# Ignore logs
+*.log
