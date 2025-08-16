@@ -561,6 +561,36 @@ const POS_BG: Record<Position, string> = {
   K: "bg-black/15", // "very light black"
 };
 
+// ----- Taken Grid Helpers (snake mapping) -----
+function getRoundAndSlot(overallPick: number, leagueSize: number) {
+  const round = Math.ceil(overallPick / leagueSize);
+  const pickInRound = ((overallPick - 1) % leagueSize) + 1;
+  const slot = round % 2 === 1 ? pickInRound : leagueSize - pickInRound + 1;
+  return { round, slot };
+}
+
+// Build [round][slot] => Player | null
+function buildTakenGrid(
+  picks: { player_id: string; owner: "me" | "other"; ts: number }[],
+  players: Player[],
+  settings: DraftSettings
+) {
+  const { leagueSize, rounds } = settings;
+  const grid: (Player | null)[][] = Array.from({ length: rounds }, () =>
+    Array.from({ length: leagueSize }, () => null)
+  );
+  const byId = new Map(players.map((p) => [p.id, p]));
+
+  for (let i = 0; i < picks.length; i++) {
+    const overall = i + 1;
+    const { round, slot } = getRoundAndSlot(overall, leagueSize);
+    if (round >= 1 && round <= rounds) {
+      grid[round - 1][slot - 1] = byId.get(picks[i].player_id) ?? null;
+    }
+  }
+  return grid;
+}
+
 const PositionPanel: React.FC<{
   title: Position;
   players: Player[];
@@ -663,7 +693,9 @@ export default function App() {
   const [posFilter, setPosFilter] = useState<Position | "ALL">("ALL");
   const [showWhy, setShowWhy] = useState(false);
   // NEW: which main pane is visible
-  const [activePane, setActivePane] = useState<"PICKER" | "PLAYERS">("PICKER");
+  const [activePane, setActivePane] = useState<"PICKER" | "PLAYERS" | "TAKEN">(
+    "PICKER"
+  );
 
   const takenSet = useMemo(
     () => new Set(picks.map((p) => p.player_id)),
@@ -711,6 +743,12 @@ export default function App() {
     });
     return map;
   }, [availablePlayers]);
+
+  // Grid of all taken players by [round][slot]
+  const takenGrid = useMemo(
+    () => buildTakenGrid(picks, players, settings),
+    [picks, players, settings]
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -1024,7 +1062,7 @@ export default function App() {
                 : "hover:bg-black/5"
             }`}
           >
-            Picker
+            Recomended
           </button>
           <button
             type="button"
@@ -1035,7 +1073,18 @@ export default function App() {
                 : "hover:bg-black/5"
             }`}
           >
-            All Players
+            Available
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivePane("TAKEN")}
+            className={`px-3 py-1 rounded-full border text-xl ${
+              activePane === "TAKEN"
+                ? "bg-emerald-500 text-white border"
+                : "hover:bg-black/5"
+            }`}
+          >
+            All Taken
           </button>
         </div>
 
@@ -1182,6 +1231,82 @@ export default function App() {
             </SectionCard>
           </div>
         )}
+
+        {/* MAIN PANE: All Taken */}
+        {activePane === "TAKEN" && (
+          <div className="mb-6">
+            <SectionCard title="All Taken (Rounds × Slots)">
+              {/* JV column index (0-based) */}
+              {(() => {
+                const jvIndex = settings.draftSlot - 1;
+                const JV_TH_CLASS =
+                  "ring-2 ring-amber-400 ring-offset-1 ring-offset-gray-100 rounded-md";
+                const JV_TD_CLASS =
+                  "ring-2 ring-amber-400 ring-offset-1 ring-offset-white rounded-md";
+                return (
+                  <div className="overflow-auto border rounded-2xl">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                        <tr>
+                          <th className="p-2 text-left w-28">Round</th>
+                          {Array.from({ length: settings.leagueSize }).map(
+                            (_, i) => (
+                              <th
+                                key={i}
+                                className={`p-2 text-left whitespace-nowrap ${
+                                  i === jvIndex ? JV_TH_CLASS : ""
+                                }`}
+                              >
+                                {i + 1 === settings.draftSlot ? "JV" : i + 1}
+                              </th>
+                            )
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {takenGrid.map((row, rIdx) => (
+                          <tr key={rIdx} className="border-t">
+                            <td className="p-2 font-semibold text-gray-600">
+                              ROUND {rIdx + 1}
+                            </td>
+                            {row.map((player, sIdx) => {
+                              const bg = player
+                                ? POS_BG[player.position as Position] ?? ""
+                                : "";
+                              return (
+                                <td
+                                  key={sIdx}
+                                  className={`p-2 align-top ${bg} ${
+                                    sIdx === jvIndex ? JV_TD_CLASS : ""
+                                  }`}
+                                >
+                                  {player ? (
+                                    <div>
+                                      <div className="font-medium leading-tight">
+                                        {player.name}
+                                      </div>
+                                      <div className="text-xs text-gray-700">
+                                        {player.position}
+                                        {player.team ? ` · ${player.team}` : ""}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="opacity-40">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </SectionCard>
+          </div>
+        )}
+
         <Modal
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
