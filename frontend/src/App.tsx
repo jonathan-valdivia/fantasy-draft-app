@@ -689,12 +689,18 @@ export default function App() {
     runSensitivity: 1.0,
   });
 
+  // Read-only board mode (share: ?mode=board or #board)
+  const isBoard =
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).get("mode") === "board" ||
+      window.location.hash === "#board");
+
   const [filter, setFilter] = useState("");
   const [posFilter, setPosFilter] = useState<Position | "ALL">("ALL");
   const [showWhy, setShowWhy] = useState(false);
   // NEW: which main pane is visible
   const [activePane, setActivePane] = useState<"PICKER" | "PLAYERS" | "TAKEN">(
-    "PICKER"
+    isBoard ? "TAKEN" : "PICKER"
   );
 
   const takenSet = useMemo(
@@ -907,6 +913,89 @@ export default function App() {
     const next = { ...settings, [k]: v };
     setSettings(next);
     api.updateSettings({ [k]: v } as Partial<DraftSettings>).catch(() => {});
+  }
+
+  // ---------------- Read-only Board View ----------------
+  if (isBoard) {
+    const jvIndex = settings.draftSlot - 1;
+    const JV_TH_CLASS =
+      "ring-2 ring-amber-400 ring-offset-1 ring-offset-gray-100 rounded-md";
+    const JV_TD_CLASS =
+      "ring-2 ring-amber-400 ring-offset-1 ring-offset-white rounded-md";
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto p-4 md:p-6">
+          <motion.h1
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-2xl md:text-3xl font-bold mb-3"
+          >
+            JVLOOKUP — Draft Board (Read-only)
+          </motion.h1>
+          <SectionCard
+            title="All Taken (Rounds × Slots)"
+            right={<span className="text-xs text-gray-500">auto-updating</span>}
+            defaultOpen
+          >
+            <div className="overflow-auto border rounded-2xl">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                  <tr>
+                    <th className="p-2 text-left w-28">Round</th>
+                    {Array.from({ length: settings.leagueSize }).map((_, i) => (
+                      <th
+                        key={i}
+                        className={`p-2 text-left whitespace-nowrap ${
+                          i === jvIndex ? JV_TH_CLASS : ""
+                        }`}
+                      >
+                        {i + 1 === settings.draftSlot ? "JV" : i + 1}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {takenGrid.map((row, rIdx) => (
+                    <tr key={rIdx} className="border-t">
+                      <td className="p-2 font-semibold text-gray-600">
+                        ROUND {rIdx + 1}
+                      </td>
+                      {row.map((player, sIdx) => {
+                        const bg = player
+                          ? POS_BG[player.position as Position] ?? ""
+                          : "";
+                        return (
+                          <td
+                            key={sIdx}
+                            className={`p-2 align-top ${bg} ${
+                              sIdx === jvIndex ? JV_TD_CLASS : ""
+                            }`}
+                          >
+                            {player ? (
+                              <div>
+                                <div className="font-medium leading-tight">
+                                  {player.name}
+                                </div>
+                                <div className="text-xs text-gray-700">
+                                  {player.position}
+                                  {player.team ? ` · ${player.team}` : ""}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="opacity-40">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    );
   }
 
   return (
