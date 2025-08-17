@@ -1027,7 +1027,7 @@ export default function App() {
 
         {/* Top Controls */}
         <div className="grid md:grid-cols gap-4 mb-4">
-          <SectionCard title="Roster Snapshot" right={<Users size={18} />}>
+          <SectionCard title="My Roster" right={<Users size={18} />}>
             <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
               {(
                 ["QB", "RB", "WR", "TE", "FLEX", "DST", "K", "BENCH"] as const
