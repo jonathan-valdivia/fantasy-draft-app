@@ -185,7 +185,7 @@ const scoringWeights = {
 // ADDED 8.13.2025
 // hard caps (your team)
 const MAX_BY_POSITION: Partial<Record<Position, number>> = {
-  QB: 2,
+  QB: 1,
   DST: 1,
   K: 1,
   TE: 2,
