@@ -10,9 +10,7 @@ The app is built with docker. Presently it is hosted on a Digital Ocean Droplet.
 
 ### to update the droplet
 
-1. Open the droplet console
-
-Run
+1. Open the droplet console and run the following commands
 
 ```
 $ cd /opt/fantasy-draft-app
