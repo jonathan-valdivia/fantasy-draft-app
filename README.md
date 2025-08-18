@@ -20,3 +20,22 @@ $ git pull
 $ docker compose build
 $ docker compose up
 ```
+
+### to run locally
+
+Need both backend and frontend running at the same time for the localhost to show and update the data correctly.
+
+Backend
+
+```
+$ cd /fantasy-draft/backend
+$ source ../.venv/bin/activate
+$ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Frontend
+
+```
+$ cd /fantasy-draft/frontend
+$ npm run dev
+```
