@@ -8,7 +8,7 @@ The app is built with docker. Presently it is hosted on a Digital Ocean Droplet.
 
 ## Notes to self
 
-### to update the droplet
+### Updating the droplet
 
 1. Open the droplet console and run the following commands
 
@@ -19,11 +19,11 @@ $ docker compose build
 $ docker compose up
 ```
 
-### to run locally
+### Running the app locally
 
 Need both backend and frontend running at the same time for the localhost to show and update the data correctly.
 
-Backend
+1. To run the Backend, open a terminal window and run the following commands
 
 ```
 $ cd /fantasy-draft/backend
@@ -31,7 +31,7 @@ $ source ../.venv/bin/activate
 $ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Frontend
+2. To run the Frontend, open a terminal window and run the following commands
 
 ```
 $ cd /fantasy-draft/frontend
