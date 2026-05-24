@@ -1,39 +1,96 @@
 # NFL Fantasy Draft Assistant
 
-This is an application I built to be able to remotley participate in an offline draft. The idea was that I have a helper at the offline draft that marks players as they are taken. The app syncs over the web so I can see the results as they are put in. On my turn I mark my pick and the helper can see who I chose and mark it on the offline draft board.
+NFL Fantasy Draft Assistant is a web app I built so I could participate remotely in an offline fantasy football draft. A helper at the live draft marks players as they are taken, the app syncs those picks over the web, and I can mark my own pick when it is my turn so the helper can update the physical draft board.
 
-## Where it runs
+## Why I Built This
 
-The app is built with docker. Presently it is hosted on a Digital Ocean Droplet.
+The project solves a practical workflow problem: offline fantasy drafts are fun, but they are hard to join remotely without losing track of picks. I wanted a lightweight draft board that could sync between two people, help me see who was still available, and give me a better way to make picks from a distance.
 
-## Notes to self
+It was also a learning project for building a small full-stack app with a React frontend, a FastAPI backend, Docker-based deployment, and a simple production hosting setup on a DigitalOcean Droplet.
 
-### Updating the droplet
+## Tech Stack
 
-1. Open the droplet console and run the following commands
+- React 19, TypeScript, and Vite for the frontend
+- Tailwind CSS, Framer Motion, and Lucide React for UI styling and interactions
+- FastAPI and Uvicorn for the backend API
+- JSON/CSV player data loaded by the backend
+- Docker Compose for running the frontend, backend, and reverse proxy together
+- Caddy for production web serving and HTTPS on the droplet
 
+## Key Features
+
+- Shared draft state so a remote user and an in-person helper can track picks together
+- Player pool loaded from backend data files
+- Mark players as drafted by me or by another team
+- Undo and reset controls for draft corrections
+- Draft settings for league size, draft slot, rounds, scoring format, and recommendation behavior
+- Snake-draft awareness for upcoming pick numbers
+- Heuristic player ranking based on projected points, roster needs, positional runs, scoring format, and draft round
+- Position filters and search for quickly finding available players
+
+## What I Learned
+
+- Designing a small API around shared draft state
+- Keeping frontend state synchronized with a backend service
+- Modeling fantasy draft settings, roster needs, and pick recommendations
+- Building a production deployment with Docker Compose and Caddy
+- Separating local development workflow from droplet deployment workflow
+- Using AI-assisted development to quickly iterate on product behavior and UI details
+
+## Current Status
+
+Prototype / learning project. The app is functional for the draft workflow it was built for, but it is not packaged as a polished public product.
+
+## Screenshots
+
+Screenshots can be added here if the UI needs to be shown in the repository.
+
+## Running Locally
+
+The backend and frontend both need to run for the app to load data and sync picks correctly.
+
+### Backend
+
+From the repository root:
+
+```bash
+cd backend
+python -m venv ../.venv
+source ../.venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-$ cd /opt/fantasy-draft-app
-$ git pull
-$ docker compose build
-$ docker compose up
+
+### Frontend
+
+In a second terminal, from the repository root:
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-### Running the app locally
+The frontend development server is powered by Vite and proxies `/api` requests to the FastAPI server on port `8000`.
 
-Need both backend and frontend running at the same time for the localhost to show and update the data correctly.
+## Running with Docker
 
-1. To run the Backend, open a terminal window and run the following commands
+The production-style setup uses Docker Compose to run the backend, frontend, and Caddy reverse proxy together.
 
+```bash
+docker compose build
+docker compose up
 ```
-$ cd /fantasy-draft/backend
-$ source ../.venv/bin/activate
-$ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
 
-2. To run the Frontend, open a terminal window and run the following commands
+## Deployment Notes
 
-```
-$ cd /fantasy-draft/frontend
-$ npm run dev
+The app is currently built with Docker and hosted on a DigitalOcean Droplet.
+
+To update the droplet:
+
+```bash
+cd /opt/fantasy-draft-app
+git pull
+docker compose build
+docker compose up
 ```
